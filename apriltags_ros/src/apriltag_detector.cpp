@@ -36,6 +36,7 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh): i
   pnh.param<std::string>("tag_family", tag_family, "36h11");
 
   pnh.param<bool>("projected_optics", projected_optics_, false);
+  pnh.param<bool>("single_flag", single_flag_, false);
 
   const AprilTags::TagCodes* tag_codes;
   if(tag_family == "16h5"){
@@ -60,9 +61,10 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh): i
 
   tag_detector_= boost::shared_ptr<AprilTags::TagDetector>(new AprilTags::TagDetector(*tag_codes));
   image_sub_ = it_.subscribeCamera("image_rect", 1, &AprilTagDetector::imageCb, this);
-  image_pub_ = it_.advertise("tag_detections_image", 1);
+  image_pub_ = it_.advertise("output", 1);
   detections_pub_ = nh.advertise<AprilTagDetectionArray>("tag_detections", 1);
-  pose_pub_ = nh.advertise<geometry_msgs::PoseArray>("tag_detections_pose", 1);
+  pose_pub_ = pnh.advertise<geometry_msgs::PoseArray>("output_pose_array", 1);
+  pose_stamped_pub_ = pnh.advertise<geometry_msgs::PoseStamped>("output_pose", 1);
 }
 AprilTagDetector::~AprilTagDetector(){
   image_sub_.shutdown();
@@ -106,6 +108,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::ImageConstPtr& msg, const sens
     cv_ptr->header.frame_id = sensor_frame_id_;
 
   AprilTagDetectionArray tag_detection_array;
+  geometry_msgs::PoseStamped tag_pose;
   geometry_msgs::PoseArray tag_pose_array;
   tag_pose_array.header = cv_ptr->header;
 
@@ -123,7 +126,6 @@ void AprilTagDetector::imageCb(const sensor_msgs::ImageConstPtr& msg, const sens
     Eigen::Matrix3d rot = transform.block(0, 0, 3, 3);
     Eigen::Quaternion<double> rot_quaternion = Eigen::Quaternion<double>(rot);
 
-    geometry_msgs::PoseStamped tag_pose;
     tag_pose.pose.position.x = transform(0, 3);
     tag_pose.pose.position.y = transform(1, 3);
     tag_pose.pose.position.z = transform(2, 3);
@@ -143,6 +145,10 @@ void AprilTagDetector::imageCb(const sensor_msgs::ImageConstPtr& msg, const sens
     tf::Stamped<tf::Transform> tag_transform;
     tf::poseStampedMsgToTF(tag_pose, tag_transform);
     tf_pub_.sendTransform(tf::StampedTransform(tag_transform, tag_transform.stamp_, tag_transform.frame_id_, description.frame_name()));
+  }
+
+  if (single_flag_) {
+    pose_stamped_pub_.publish(tag_pose);
   }
   detections_pub_.publish(tag_detection_array);
   pose_pub_.publish(tag_pose_array);
