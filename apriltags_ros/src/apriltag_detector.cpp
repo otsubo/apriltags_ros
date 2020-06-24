@@ -1,6 +1,7 @@
 #include <apriltags_ros/apriltag_detector.h>
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
+#include <sensor_msgs/Image.h>
 #include <boost/foreach.hpp>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseArray.h>
@@ -37,6 +38,8 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh): i
 
   pnh.param<bool>("projected_optics", projected_optics_, false);
   pnh.param<bool>("single_flag", single_flag_, false);
+  pnh.param<int>("tag_id", tag_id_, 0);
+  pnh.param<bool>("debug_view", debug_view_, false);
 
   const AprilTags::TagCodes* tag_codes;
   if(tag_family == "16h5"){
@@ -65,6 +68,7 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh): i
   detections_pub_ = nh.advertise<AprilTagDetectionArray>("tag_detections", 1);
   pose_pub_ = pnh.advertise<geometry_msgs::PoseArray>("output_pose_array", 1);
   pose_stamped_pub_ = pnh.advertise<geometry_msgs::PoseStamped>("output_pose", 1);
+  //debug_img_pub_ = pnh.advertise<sensor_msgs::Image>("debug_output", 1);
 }
 AprilTagDetector::~AprilTagDetector(){
   image_sub_.shutdown();
@@ -109,7 +113,9 @@ void AprilTagDetector::imageCb(const sensor_msgs::ImageConstPtr& msg, const sens
 
   AprilTagDetectionArray tag_detection_array;
   geometry_msgs::PoseStamped tag_pose;
+  geometry_msgs::PoseStamped tag_pose_with_id;
   geometry_msgs::PoseArray tag_pose_array;
+  sensor_msgs::Image debug_image;
   tag_pose_array.header = cv_ptr->header;
 
   BOOST_FOREACH(AprilTags::TagDetection detection, detections){
@@ -142,14 +148,22 @@ void AprilTagDetector::imageCb(const sensor_msgs::ImageConstPtr& msg, const sens
     tag_detection_array.detections.push_back(tag_detection);
     tag_pose_array.poses.push_back(tag_pose.pose);
 
+    if (tag_detection.id == tag_id_){
+      tag_pose_with_id = tag_pose;
+    }
     tf::Stamped<tf::Transform> tag_transform;
     tf::poseStampedMsgToTF(tag_pose, tag_transform);
     tf_pub_.sendTransform(tf::StampedTransform(tag_transform, tag_transform.stamp_, tag_transform.frame_id_, description.frame_name()));
   }
 
   if (single_flag_) {
-    pose_stamped_pub_.publish(tag_pose);
+    pose_stamped_pub_.publish(tag_pose_with_id);
   }
+
+  // if (debug_view_) {
+  //   debug_image = cv_ptr->toImageMsg();
+  //   debug_pub_.publish(debug_image);
+  // }
   detections_pub_.publish(tag_detection_array);
   pose_pub_.publish(tag_pose_array);
   image_pub_.publish(cv_ptr->toImageMsg());
