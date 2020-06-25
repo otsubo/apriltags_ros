@@ -117,6 +117,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::ImageConstPtr& msg, const sens
   geometry_msgs::PoseArray tag_pose_array;
   sensor_msgs::Image debug_image;
   tag_pose_array.header = cv_ptr->header;
+  tag_pose_with_id.header = cv_ptr->header;
 
   BOOST_FOREACH(AprilTags::TagDetection detection, detections){
     std::map<int, AprilTagDescription>::const_iterator description_itr = descriptions_.find(detection.id);
@@ -148,12 +149,11 @@ void AprilTagDetector::imageCb(const sensor_msgs::ImageConstPtr& msg, const sens
     tag_detection_array.detections.push_back(tag_detection);
     tag_pose_array.poses.push_back(tag_pose.pose);
 
-    if (tag_detection.id == tag_id_){
-      tag_pose_with_id = tag_pose;
-    }
-    tf::Stamped<tf::Transform> tag_transform;
-    tf::poseStampedMsgToTF(tag_pose, tag_transform);
-    tf_pub_.sendTransform(tf::StampedTransform(tag_transform, tag_transform.stamp_, tag_transform.frame_id_, description.frame_name()));
+    tag_pose_with_id.pose = tag_pose.pose;
+
+    // tf::Stamped<tf::Transform> tag_transform;
+    // tf::poseStampedMsgToTF(tag_pose, tag_transform);
+    // tf_pub_.sendTransform(tf::StampedTransform(tag_transform, tag_transform.stamp_, tag_transform.frame_id_, description.frame_name()));
   }
 
   if (single_flag_) {
